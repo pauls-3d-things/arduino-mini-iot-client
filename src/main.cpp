@@ -1,3 +1,4 @@
+#include <Adafruit_APDS9960.h>
 #include <Adafruit_CCS811.h>
 #include <Arduino.h>
 #include <BME280I2C.h>
@@ -40,6 +41,7 @@ BME280I2C::Settings settings(BME280::OSR_X1, BME280::OSR_X1, BME280::OSR_X1, BME
 BME280I2C bme(settings);
 
 Adafruit_CCS811 ccs;
+Adafruit_APDS9960 apds;
 
 void setup() {
   Serial.begin(115200);
@@ -49,10 +51,16 @@ void setup() {
     Serial.println("BME280 not found ...");
     delay(1000);
   }
-  if (!ccs.begin()) {
+  while (!ccs.begin()) {
     Serial.println("CCS811 not found ...");
     delay(1000);
   }
+  while (!apds.begin()) {
+    Serial.println("APDS device not found");
+    delay(1000);
+  }
+  apds.enableColor(true);
+  apds.enableProximity(false);
 }
 
 void loop() {
@@ -62,15 +70,14 @@ void loop() {
   BME280::PresUnit presUnit(BME280::PresUnit_hPa);
   bme.read(pres, temp, hum, tempUnit, presUnit);
 
-  // value from CCS811
+  // values from CCS811
   float eCO2(NAN), tVOC(NAN), ccsTemp(NAN);
   boolean waitForData = true;
   while (waitForData) {
     if (ccs.available()) {
       // calibrate the device
       ccsTemp = ccs.calculateTemperature();
-      ccs.setTempOffset(ccsTemp - temp);
-
+      ccs.setEnvironmentalData(hum, temp);
       uint8_t errCode = ccs.readData();
       if (errCode == 0) {
         eCO2 = ccs.geteCO2();
@@ -85,8 +92,17 @@ void loop() {
     delay(500);
   }
 
-  String data = String(temp) + "," + String(hum) + "," + String(pres)               // BME280 data
-                + "," + String(ccsTemp) + "," + String(eCO2) + "," + String(tVOC);  // CCS811 data
+  // value form A0
+  int analogValue = analogRead(A0);
+
+  // values from APDS9660
+  uint16_t rt, gt, bt, ct;
+  apds.getColorData(&rt, &gt, &bt, &ct);
+
+  String data = String(temp) + "," + String(hum) + "," + String(pres)                         // BME280 data
+                + "," + String(ccsTemp) + "," + String(eCO2) + "," + String(tVOC)             // CCS811 data
+                + "," + String(analogValue)                                                   // A0
+                + "," + String(rt) + "," + String(gt) + "," + String(bt) + "," + String(ct);  // APDS9660
   Serial.println(data);
 
   if (WiFi.status() != WL_CONNECTED) {
@@ -95,5 +111,5 @@ void loop() {
   }
   postData("sensors.csv", data, true, true);  // append to file, prefix timestamp
 
-  delay(1000 * 60 * 5); // wait for 5 minutes
+  delay(1000 * 60 * 5);  // wait for 5 minutes
 }
