@@ -47,14 +47,25 @@ void setup() {
   Serial.begin(115200);
   Wire.begin();
 
+  rst_info* rstinfo = ESP.getResetInfoPtr();
+  Serial.println(rstinfo->reason);
+
   while (!bme.begin()) {
     Serial.println("BME280 not found ...");
     delay(1000);
   }
-  while (!ccs.begin()) {
+
+  uint8_t tries = 0;
+  while (!ccs.begin(rstinfo->reason != REASON_DEEP_SLEEP_AWAKE)) {
     Serial.println("CCS811 not found ...");
     delay(1000);
+    if (tries == 60) {
+      ccs.begin(true);  // restart the device
+      delay(1000);
+    }
+    tries++;
   }
+
   while (!apds.begin()) {
     Serial.println("APDS device not found");
     delay(1000);
@@ -74,20 +85,26 @@ void loop() {
   float eCO2(NAN), tVOC(NAN), ccsTemp(NAN);
   boolean waitForData = true;
   while (waitForData) {
+    // calibrate the device
+    ccsTemp = ccs.calculateTemperature();
+    ccs.setEnvironmentalData(hum, temp);
+
     if (ccs.available()) {
-      // calibrate the device
-      ccsTemp = ccs.calculateTemperature();
-      ccs.setEnvironmentalData(hum, temp);
       uint8_t errCode = ccs.readData();
       if (errCode == 0) {
         eCO2 = ccs.geteCO2();
         tVOC = ccs.getTVOC();
         waitForData = false;
       } else {
-        Serial.println("Error reading from CCS811... " + String(errCode));
+        Serial.println("CCS811: error reading data " + String(errCode));
+      }
+
+      if (eCO2 == 0 && tVOC == 0) {
+        Serial.println("CCS811: Skipping zero values...");
+        waitForData = true;
       }
     } else {
-      Serial.println("Waiting for CCS811...");
+      Serial.println("CCS811: waiting");
     }
     delay(500);
   }
@@ -111,5 +128,6 @@ void loop() {
   }
   postData("sensors.csv", data, true, true);  // append to file, prefix timestamp
 
-  delay(1000 * 60 * 5);  // wait for 5 minutes
+  Serial.println("entering deep sleep");
+  ESP.deepSleep(5 * 60 * 1000 * 1000);  // zzz 5 minutes
 }

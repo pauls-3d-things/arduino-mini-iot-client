@@ -1,3 +1,3 @@
 .pio
-src/config.h
+include/config.h
 .vscode/
