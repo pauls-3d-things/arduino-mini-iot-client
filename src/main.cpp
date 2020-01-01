@@ -56,14 +56,16 @@ void waitForWifi() {
 
 void postData(String filename, String payload, boolean append, boolean tsprefix) {
   HTTPClient http;
-  http.begin(String("http://") + MINI_IOT_SERVER         //
-             + "/files/" + HOSTNAME                      //
-             + "/" + filename                            //
-             + "?append=" + (append ? "true" : "false")  //
-             + "&tsprefix=" + (tsprefix ? "true" : "false"));
+  bool isBegin = http.begin(String("http://") + MINI_IOT_SERVER         //
+                            + "/files/" + HOSTNAME                      //
+                            + "/" + filename                            //
+                            + "?append=" + (append ? "true" : "false")  //
+                            + "&tsprefix=" + (tsprefix ? "true" : "false"));
   http.addHeader("Content-Type", "text/plain");
   http.POST(payload);
-  // http.writeToStream(&Serial);
+  Serial.println(String("POST: http://") + MINI_IOT_SERVER  + "/files/" + HOSTNAME + "/" + filename);
+  delay(250);
+  http.writeToStream(&Serial);
   http.end();
 }
 
@@ -144,7 +146,7 @@ void loop() {
       }
     } else {
       Serial.println("CCS811: waiting");
-        ledCode(CODE_CCS_WAITING);
+      ledCode(CODE_CCS_WAITING);
     }
     delay(500);
   }
@@ -169,5 +171,6 @@ void loop() {
   postData("sensors.csv", data, true, true);  // append to file, prefix timestamp
 
   Serial.println("entering deep sleep");
-  ESP.deepSleep(5 * 60 * 1000 * 1000);  // zzz 5 minutes
+  delay(5 * 60 * 1000 * 1000);
+  // ESP.deepSleep(5 * 60 * 1000 * 1000);  // zzz 5 minutes
 }
