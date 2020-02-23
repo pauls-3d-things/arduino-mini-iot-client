@@ -1,42 +1,29 @@
 #include <Arduino.h>
-#include <ESP8266HTTPClient.h>
-#include <ESP8266WiFi.h>
 
-#include "config.h"
-// or define these
-// #define WIFI_SSID "<YOUR-SSID>"
-// #define WIFI_PASS "<YOUR-PASS>"
-// #define HOSTNAME "your-device-01"
-// #define MINI_IOT_SERVER "<your-mini-iot-host>"
+#include "config.h"  // create this in include/ (and add it to .gitignore)
 
-void waitForWifi() {
-  WiFi.hostname(HOSTNAME);
-  WiFi.mode(WIFI_STA);
-  do {
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    delay(4000);
-  } while (WiFi.status() != WL_CONNECTED);
-}
+#include "mini-iot-client.h"
 
-void postData(String filename, String payload, boolean append, boolean tsprefix) {
-  HTTPClient http;
-  http.begin(String("http://") + MINI_IOT_SERVER         //
-             + "/files/" + HOSTNAME                      //
-             + "/" + filename                            //
-             + "?append=" + (append ? "true" : "false")  //
-             + "&tsprefix=" + (tsprefix ? "true" : "false"));
-  http.addHeader("Content-Type", "text/plain");
-  http.POST(payload);
-  // http.writeToStream(&Serial);
-  http.end();
-}
+MiniIotClient miniIot(HOSTNAME, MINI_IOT_SERVER, WIFI_SSID, WIFI_PASS);
 
 void setup() {
-  waitForWifi();
+  Serial.begin(115200);
+  // miniIot.setDebugStream(&Serial);
 
-  postData("test.csv", "it works", true, true);
+  miniIot.connectToWifi();
 
-  ESP.deepSleep(5 * 60 * 1000 * 1000);  // sleep for 5 minutes
+  /* write a file */
+  miniIot.save("status.txt", "it works");
+  // miniIot.saveWithTimestamp("status.txt", "it works");
 }
 
-void loop() {}
+void loop() {
+  // check if connected to wifi, if not it calls connectToWifi()
+  miniIot.checkWifi();
+
+  /* Write lines to a file: */
+  // miniIot.append("status.csv", "running");
+  miniIot.appendWithTimestamp("status.csv", "running");
+
+  delay(5000);
+}
