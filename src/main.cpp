@@ -21,7 +21,12 @@
 #define CODE_CCS_WAITING 2
 #define CODE_WIFI_WAITING 1
 
+#define CCS_RETRIES 10
+
+#define LEDS_ENABLED
+
 void ledCode(int num) {
+#ifdef LEDS_ENABLED
   digitalWrite(LED_BUILTIN, HIGH);
   delay(250);
   for (uint8_t r = 0; r < 3; r++) {
@@ -33,6 +38,7 @@ void ledCode(int num) {
       delay(100);
     }
   }
+#endif
 }
 
 void waitForWifi() {
@@ -63,7 +69,7 @@ void postData(String filename, String payload, boolean append, boolean tsprefix)
                             + "&tsprefix=" + (tsprefix ? "true" : "false"));
   http.addHeader("Content-Type", "text/plain");
   http.POST(payload);
-  Serial.println(String("POST: http://") + MINI_IOT_SERVER  + "/files/" + HOSTNAME + "/" + filename);
+  Serial.println(String("POST: http://") + MINI_IOT_SERVER + "/files/" + HOSTNAME + "/" + filename);
   delay(250);
   http.writeToStream(&Serial);
   http.end();
@@ -80,7 +86,9 @@ Adafruit_APDS9960 apds;
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+#ifdef LEDS_ENABLED
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
   ledCode(3);
 
   rst_info* rstinfo = ESP.getResetInfoPtr();
@@ -123,7 +131,8 @@ void loop() {
   // values from CCS811
   float eCO2(NAN), tVOC(NAN), ccsTemp(NAN);
   boolean waitForData = true;
-  while (waitForData) {
+  static uint8_t ccsRetries = 0;
+  while (waitForData && ccsRetries < CCS_RETRIES) {
     // calibrate the device
     ccsTemp = ccs.calculateTemperature();
     ccs.setEnvironmentalData(hum, temp);
@@ -143,12 +152,19 @@ void loop() {
         Serial.println("CCS811: Skipping zero values...");
         ledCode(CODE_CCS_SKIPPING);
         waitForData = true;
+        ccsRetries++;
       }
     } else {
       Serial.println("CCS811: waiting");
       ledCode(CODE_CCS_WAITING);
     }
     delay(500);
+  }
+
+  if (ccsRetries == CCS_RETRIES) {
+    eCO2 = -1;
+    tVOC = -1;
+    ccsTemp = -1;
   }
 
   // value form A0
@@ -170,10 +186,10 @@ void loop() {
   }
   postData("sensors.csv", data, true, true);  // append to file, prefix timestamp
 
-  // 
+  //
 
   Serial.println("entering deep sleep");
-  
+
   delay(5 * 60 * 1000);
   // ESP.deepSleep(5 * 60 * 1000 * 1000);  // zzz 5 minutes
 }
